@@ -1,0 +1,140 @@
+@font-face {
+    font-family: 'Noto Serif JP';
+    src: url('assets/fonts/NotoSerifJP-Light.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+}
+
+:root {
+    --sidebar-width: 400px;
+}
+
+* {
+    font-family: "Noto Serif JP", serif;
+}
+
+#toggleGuiButton {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 2000;
+    opacity: 0.5;
+}
+
+#toggleGuiButton:hover {
+    opacity: 0.9;
+}
+
+h3 {
+    margin-block: .5rem;
+}
+
+h4 {
+    font-size: 14px;
+    margin-block: 1rem;
+    opacity: .8;
+}
+
+hr {
+    width: calc(100% - 1rem);
+    margin-left: 0;
+    margin-block: 1rem;
+}
+
+aside {
+    backdrop-filter: blur(5px);
+    padding: 1rem;
+    z-index: 500;
+    position: fixed;
+    overflow-y: scroll;
+    height: 100vh;
+    width: var(--sidebar-width);
+    transition: opacity 0.5s;
+}
+
+aside .infoText {
+    margin-bottom: 3rem;
+}
+
+aside .infoText p {
+    font-size: 14px;
+    line-height: 1;
+    margin-block: 6px;
+    opacity: 0.8;
+}
+
+@media screen and (max-width: 1500px) {
+    aside {
+        display: static;
+    }
+}
+
+aside:hover {
+    opacity: 1;
+}
+
+.shinigamiEyes__Line__Container {
+    font-family: "Noto Serif JP", serif;
+    font-optical-sizing: auto;
+    font-weight: 300;
+    font-style: normal;
+    position: relative;
+    text-align: center;
+    height: 100px;
+}
+
+input {
+    padding: 6px 12px;
+    border-radius: 9999px;
+    border: none;
+    color: white;
+    background-color: rgba(255, 255, 255, 0.144);
+}
+
+input[type="range"] {
+    width: calc(100% - 2rem);
+    padding-block: 0;
+}
+
+button {
+    margin-block: 2px;
+    cursor: pointer;
+    border: none;
+    border-radius: 9999px;
+    padding: 6px 12px;
+    color: white;
+    background-color: rgba(255, 255, 255, 0.144);
+}
+
+button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+input[type="checkbox"] {
+    cursor: pointer;
+    transform: scale(1.2);
+    display: inline-block;
+}
+
+.shinigamiEyes__Line--reused {
+    filter: blur(4px);
+    user-select: none;
+}
+
+.shinigamiEyes__Line {
+    width: 100%;
+    position: absolute;
+    text-align: center;
+    font-size: 48px;
+    color: white;
+}
+
+.shinigamiEyes__Line__Digit::selection {
+    background: #ff0000;
+    color: white;
+}
+
+.shinigamiEyes__Line__Digit {
+    display: inline-block;
+    filter: blur(1px);
+}

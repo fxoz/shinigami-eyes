@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css" />
+    <title>Shinigami Eyes</title>
+</head>
+
+<body style="background-color: black; color: white; font-family: Arial, Helvetica, sans-serif; position: relative">
+    <button id="toggleGuiButton" style="float: right;">Hide Settings</button>
+    <aside>
+        <h2 style="margin-block: 0; margin-bottom: .5rem;">Shinigami Eyes</h2>
+        <p style="font-size: 10; opacity: 0.5;">&copy; 2025 Felix Orosz</p>
+        <div id="chromeWarning">
+            <span style="color:rgb(255, 195, 117)">Notice: </span> Firefox is less prone to flickering issues
+            and
+            can render the text more smoothly than Chrome.
+        </div>
+        <hr />
+        <h3>Text</h3>
+        <input type="text" id="lineInput" placeholder="Enter a line" autocomplete="off">
+        <button onclick="addLineTriggered();">Add line</button>
+        <button onclick="clearAll();" style="color: #ffb2b2;">Delete all lines</button>
+        <hr />
+        <h3>Configuration</h3>
+        <button onclick="window.location.reload();">Reset <i>everything</i></button>
+        <div style="position: relative">
+            <span id="reapplyRecommended"
+                style="position: absolute; top: 0; right: 0; padding: .2rem .5rem; border-radius: 9999px; background: rgba(255, 255, 0, 0.192); color: white; display: none">Reapply
+                recommended</span>
+            <button onclick="reapply();">Reapply</button>
+        </div>
+        <h4>For Streamers</h4>
+        <button onclick="makeTransparent();">Make background transparent (for OBS)</button>
+
+        <hr />
+
+        <h3>Style</h3>
+
+        <h4>Animation</h4>
+
+        <span>Transition Duration</span>
+        <input type="range" min="0" max="10000" value="1000" id="transitionDurationSlider" autocomplete="off" />
+
+        <span>Animation Delay</span>
+        <input type="range" min="0" max="10000" value="1000" id="animationDelaySlider" autocomplete="off" />
+
+        <span>Clone Instances</span>
+        <input type="range" min="1" max="10" value="1" id="instancesSlider" autocomplete="off" />
+
+        <h4>Layout</h4>
+
+        <span>Container Height</span>
+        <input type="range" min="1" max="300" value="100" id="containerHeightSlider" autocomplete="off" />
+
+        <span>Letter Spacing</span>
+        <input type="range" min="0" max="50" value="10" id="spacingSlider" autocomplete="off" />
+
+        <h4>Appearance</h4>
+
+        <span>Opacity Min.</span>
+        <input type="range" min="0" max="100" value="30" id="opacityMinSlider" autocomplete="off" />
+
+        <span>Size</span>
+        <input type="range" min="50" max="200" value="100" id="sizeSlider" autocomplete="off" />
+
+        <span>Hue</span>
+        <input type="range" min="0" max="360" value="0" id="hueSlider" autocomplete="off" />
+
+        <span>Saturation</span>
+        <input type="range" min="0" max="300" value="100" id="saturationSlider" autocomplete="off" />
+
+        <span>Brightness</span>
+        <input type="range" min="0" max="200" value="100" id="brightnessSlider" autocomplete="off" />
+
+        <span>Opacity</span>
+        <input type="range" min="0" max="100" value="100" id="opacitySlider" autocomplete="off" />
+
+        <h3>Effects</h3>
+        <div class="checkBox">
+            <input type="checkbox" id="glowCheckbox" checked autocomplete="off" />
+            <span>Glow</span>
+        </div>
+        <div class="checkBox">
+            <input type="checkbox" id="animateCheckbox" checked autocomplete="off" />
+            <span>Animate</span>
+        </div>
+        <div class="checkBox">
+            <input type="checkbox" id="digitBlurCheckbox" checked autocomplete="off" />
+            <span>Subtle Blur</span>
+        </div>
+        <div class="checkBox">
+            <input type="checkbox" id="outlineLettersCheckbox" autocomplete="off" />
+            <span>Box Outline (Letters)</span>
+        </div>
+        <hr />
+        <h3>Text</h3>
+        <p id="textPreview" style="font-family: monospace;"></p>
+        <hr />
+        <h3>Important Notes</h3>
+        <div class="infoText">
+            <p>Issues? Try changing the browser!</p>
+            <p>Also try enabling/disabling hardware acceleration for your browser.</p>
+            <p>It is strongly recommended to use a PC/laptop.</p>
+            <p>Large "size" & "instances" values may cause performance issues.</p>
+            <p>As everything is rendered on the client side, no data is shared with any server.</p>
+        </div>
+    </aside>
+
+    <script type="text/javascript" src="index.js"></script>
+    <script src="general-config.js"></script>
+    <script src="style-config.js"></script>
+</body>
+
+</html>
