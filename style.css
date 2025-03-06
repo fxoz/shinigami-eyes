@@ -13,6 +13,8 @@
     font-family: "Noto Serif JP", serif;
 }
 
+a { color: #fff }
+
 #toggleGuiButton {
     position: fixed;
     top: 1rem;
