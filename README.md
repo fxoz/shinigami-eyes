@@ -1,5 +1,7 @@
 # Shinigami Eyes
 
+![Screenshot of the UI](https://iili.io/3KXygVI.png)
+
 Inspired by the _Death Note_ series, this project primarily serves as a demonstration of the capabilities of "pure" CSS & JavaScript without any libraries and with no SVG, Canvas or WebGL.
 
 Simply put, in the series, the Shinigami Eyes allow the user to see the name and remaining lifespan of any person by looking at them. This project is a recreation of that effect.
