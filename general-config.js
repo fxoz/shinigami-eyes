@@ -27,11 +27,15 @@ function addLineTriggered() {
 
 function getLinesText() {
     const linesText = [];
-    for (lineElement of document.querySelectorAll('.shinigamiEyes__Line')) {
+    for (const lineElement of document.querySelectorAll('.shinigamiEyes__Line')) {
         if (!lineElement.classList.contains('shinigamiEyes__Line--reused')) {
-            linesText.push(lineElement.innerText);
+            const text = Array.from(
+                lineElement.children,
+                (digit) => digit.dataset.char,
+            ).join('');
+            linesText.push(text);
         }
-    };
+    }
 
     return linesText;
 }

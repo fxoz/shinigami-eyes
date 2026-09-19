@@ -81,6 +81,7 @@ aside:hover {
     font-weight: 300;
     font-style: normal;
     position: relative;
+    overflow: visible;
     text-align: center;
     height: 100px;
 }
@@ -129,6 +130,7 @@ input[type="checkbox"] {
     text-align: center;
     font-size: 48px;
     color: white;
+    overflow: visible;
 }
 
 .shinigamiEyes__Line__Digit::selection {
@@ -137,6 +139,183 @@ input[type="checkbox"] {
 }
 
 .shinigamiEyes__Line__Digit {
+    color: transparent;
     display: inline-block;
-    filter: blur(1px);
+    filter: hue-rotate(var(--digit-hue, 0deg));
+    isolation: isolate;
+    overflow: visible;
+    position: relative;
+    will-change: transform, opacity, font-size, padding-left, padding-right;
+}
+
+.shinigamiEyes__GlyphMeasure {
+    visibility: hidden;
+}
+
+.shinigamiEyes__GlyphCore,
+.shinigamiEyes__GlyphEcho,
+.shinigamiEyes__GlyphSlice,
+.shinigamiEyes__GlyphTrail {
+    color: #ffd7d7;
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+    text-align: center;
+    transform-origin: center 28%;
+    will-change: transform, opacity;
+}
+
+.shinigamiEyes__GlyphCore {
+    animation: shinigamiEyes-core-flicker 4.2s ease-in-out infinite alternate;
+    color: #ffe1e1;
+    opacity: 0.95;
+    text-shadow:
+        0 0 2px #fff,
+        0 0 7px #ff7180,
+        0 0 16px rgba(255, 78, 94, 0.72);
+    z-index: 7;
+}
+
+.shinigamiEyes__GlyphEcho {
+    animation: shinigamiEyes-echo-flicker 4.2s ease-in-out infinite alternate;
+    color: #ffc7cd;
+    filter: blur(var(--echo-blur));
+    opacity: var(--echo-opacity-high);
+    text-shadow:
+        var(--echo-smear, 0 0 0 transparent),
+        0 0 3px rgba(255, 245, 245, 0.72),
+        0 0 9px rgba(255, 105, 120, 0.55),
+        0 0 18px rgba(255, 76, 94, 0.35);
+    transform: translate3d(var(--echo-x, 0), var(--echo-y, 0), 0) scale(var(--echo-scale));
+    transition: transform 600ms linear;
+    transform-origin: center;
+}
+
+.shinigamiEyes__GlyphSlice {
+    animation: shinigamiEyes-molten-slice 4s ease-in-out infinite alternate;
+    filter:
+        blur(calc(2.8px + var(--digit-blur, 1px)))
+        var(--motion-filter, drop-shadow(0 0 0 transparent));
+    opacity: var(--slice-opacity-high);
+    z-index: 2;
+}
+
+.shinigamiEyes__GlyphSliceInk {
+    color: #ffc0c5;
+    inset: 0;
+    position: absolute;
+    text-align: center;
+    text-shadow:
+        0 0 4px rgba(255, 225, 225, 0.8),
+        0 0 12px rgba(255, 88, 104, 0.72);
+}
+
+.shinigamiEyes__GlyphTrail {
+    animation: shinigamiEyes-molten-trail 5s ease-in-out infinite alternate;
+    color: #ff9ba7;
+    filter: blur(calc(4px + var(--digit-blur, 1px)));
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), #000 45%, transparent 100%);
+    opacity: 0.1;
+    text-shadow:
+        var(--motion-shadow, 0 0 0 transparent),
+        0 0 8px rgba(255, 112, 126, 0.68),
+        0 0 18px rgba(255, 72, 90, 0.52);
+    transform-origin: center 30%;
+    z-index: 1;
+}
+
+.shinigamiEyes__GlyphTrail--2 {
+    filter: blur(calc(6px + var(--digit-blur, 1px)));
+}
+
+.shinigamiEyes__Line__Digit::after {
+    animation: shinigamiEyes-crimson-haze 4.8s ease-in-out infinite alternate;
+    background: linear-gradient(to bottom, rgba(255, 104, 118, 0.28), rgba(255, 64, 84, 0));
+    content: '';
+    filter: blur(8px);
+    height: 135%;
+    left: 30%;
+    opacity: 0.35;
+    pointer-events: none;
+    position: absolute;
+    top: 35%;
+    width: 40%;
+    z-index: 0;
+}
+
+.shinigamiEyes__Line__Digit--paused .shinigamiEyes__GlyphSlice,
+.shinigamiEyes__Line__Digit--paused .shinigamiEyes__GlyphTrail,
+.shinigamiEyes__Line__Digit--paused .shinigamiEyes__GlyphCore,
+.shinigamiEyes__Line__Digit--paused .shinigamiEyes__GlyphEcho,
+.shinigamiEyes__Line__Digit--paused::after {
+    animation-play-state: paused;
+}
+
+.shinigamiEyes__Line__Digit--noGlow .shinigamiEyes__GlyphSlice,
+.shinigamiEyes__Line__Digit--noGlow .shinigamiEyes__GlyphSliceInk,
+.shinigamiEyes__Line__Digit--noGlow .shinigamiEyes__GlyphTrail,
+.shinigamiEyes__Line__Digit--noGlow .shinigamiEyes__GlyphCore,
+.shinigamiEyes__Line__Digit--noGlow .shinigamiEyes__GlyphEcho {
+    text-shadow: none;
+}
+
+@keyframes shinigamiEyes-molten-slice {
+    0% {
+        opacity: var(--slice-opacity-soft);
+        transform: translate3d(var(--melt-x-start), 0, 0) rotate(0deg) skewX(var(--melt-skew-start)) scaleX(1.01) scaleY(1);
+    }
+    38% {
+        opacity: var(--slice-opacity-high);
+        transform: translate3d(var(--melt-x-mid), var(--melt-y-mid), 0) rotate(var(--flow-angle-mid, 0deg)) skewX(var(--melt-skew-mid)) scaleX(0.98) scaleY(var(--melt-stretch-mid));
+    }
+    72% {
+        opacity: var(--slice-opacity-low);
+        transform: translate3d(var(--melt-x-end), var(--melt-y-end), 0) rotate(var(--flow-angle-end, 0deg)) skewX(var(--melt-skew-end)) scaleX(0.96) scaleY(var(--melt-stretch-end));
+    }
+    100% {
+        opacity: var(--slice-opacity-relaxed);
+        transform: translate3d(var(--melt-x-relax), var(--melt-y-relax), 0) skewX(var(--melt-skew-relax)) scaleX(1) scaleY(1.06);
+    }
+}
+
+@keyframes shinigamiEyes-molten-trail {
+    0% {
+        opacity: var(--trail-opacity-start);
+        transform: translate3d(var(--trail-x-start), 2px, 0) rotate(0deg) skewX(var(--trail-skew-start)) scaleX(0.98) scaleY(1.02);
+    }
+    45% {
+        opacity: var(--trail-opacity-mid);
+        transform: translate3d(var(--trail-x-mid), var(--trail-y-mid), 0) rotate(var(--trail-angle-mid, 0deg)) skewX(var(--trail-skew-mid)) scaleX(0.94) scaleY(var(--trail-stretch-mid));
+    }
+    100% {
+        opacity: var(--trail-opacity-end);
+        transform: translate3d(var(--trail-x-end), var(--trail-y-end), 0) rotate(var(--trail-angle-end, 0deg)) skewX(var(--trail-skew-end)) scaleX(0.88) scaleY(var(--trail-stretch-end));
+    }
+}
+
+@keyframes shinigamiEyes-core-flicker {
+    from { opacity: 0.88; }
+    55% { opacity: 1; }
+    to { opacity: 0.94; }
+}
+
+@keyframes shinigamiEyes-echo-flicker {
+    from { opacity: var(--echo-opacity-low); }
+    55% { opacity: var(--echo-opacity-high); }
+    to { opacity: var(--echo-opacity-relaxed); }
+}
+
+@keyframes shinigamiEyes-crimson-haze {
+    from {
+        opacity: 0.18;
+        transform: translate3d(0, 2px, 0) rotate(0deg) scaleY(0.75);
+    }
+    55% {
+        opacity: 0.34;
+        transform: translate3d(0, 8px, 0) rotate(var(--haze-angle-mid, 0deg)) scaleY(1);
+    }
+    to {
+        opacity: 0.42;
+        transform: translate3d(var(--haze-x-end, 0), var(--haze-y-end, 18px), 0) rotate(var(--haze-angle-end, 0deg)) scaleY(1.25);
+    }
 }

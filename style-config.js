@@ -1,12 +1,15 @@
 
 document.getElementById('digitBlurCheckbox').addEventListener('change', () => {
-    for (const container of document.querySelectorAll('.shinigamiEyes__Line__Digit')) {
-        container.style.filter = document.getElementById('digitBlurCheckbox').checked ? 'blur(1px)' : 'none';
+    for (const digit of document.querySelectorAll('.shinigamiEyes__Line__Digit')) {
+        digit.style.setProperty(
+            '--digit-blur',
+            document.getElementById('digitBlurCheckbox').checked ? '1px' : '0px',
+        );
     }
 });
 
-document.getElementById('animationDelaySlider').addEventListener('input', (e) => {
-    SETTINGS.REANIMATION_DELAY_MS = e.target.value;
+document.getElementById('animateCheckbox').addEventListener('change', (e) => {
+    setAnimation(e.target.checked);
 });
 
 document.getElementById('outlineLettersCheckbox').addEventListener('change', () => {
@@ -36,8 +39,8 @@ document.getElementById('sizeSlider').addEventListener('input', (e) => {
 });
 
 document.getElementById('hueSlider').addEventListener('input', (e) => {
-    for (const container of document.querySelectorAll('.shinigamiEyes__Line__Digit')) {
-        container.style.filter = `hue-rotate(${e.target.value}deg)`;
+    for (const digit of document.querySelectorAll('.shinigamiEyes__Line__Digit')) {
+        digit.style.setProperty('--digit-hue', `${e.target.value}deg`);
     }
 });
 
@@ -59,8 +62,8 @@ document.getElementById('glowCheckbox').addEventListener('change', (e) => {
         return;
     }
 
-    for (const container of document.querySelectorAll('.shinigamiEyes__Line__Digit')) {
-        container.style.textShadow = e.target.checked ? '0 0 10px white' : 'none';
+    for (const digit of document.querySelectorAll('.shinigamiEyes__Line__Digit')) {
+        digit.classList.add('shinigamiEyes__Line__Digit--noGlow');
     }
 });
 
