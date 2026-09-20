@@ -1,4 +1,5 @@
 const EXPORT_FPS = 30;
+const MAX_RAW_FRAME_BYTES = 512 * 1024 * 1024;
 const CORE_BASE_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
 const MIME_TYPES = {
     gif: 'image/gif',
@@ -7,7 +8,6 @@ const MIME_TYPES = {
 };
 
 let encoderPromise;
-let fontEmbedCSSPromise;
 let exportInProgress = false;
 
 // Keeping the worker source in memory avoids Firefox's prohibition on loading
@@ -197,26 +197,10 @@ function canvasToPngBlob(canvas) {
     });
 }
 
-async function getFontEmbedCSS(stage) {
-    // Firefox will not let html-to-image fetch a local font from a file:// page.
-    // The font is already loaded by the document, so skip the redundant fetch.
-    if (location.protocol === 'file:') return null;
-
-    if (!fontEmbedCSSPromise) {
-        fontEmbedCSSPromise = window.htmlToImage
-            .getFontEmbedCSS(stage, { preferredFontFormat: 'truetype' })
-            .catch((error) => {
-                console.warn('The export font could not be embedded.', error);
-                return null;
-            });
-    }
-    return fontEmbedCSSPromise;
-}
-
-async function getEncoder() {
+async function getEncoder(showStatus = true) {
     if (!encoderPromise) {
         encoderPromise = (async () => {
-            setExportStatus('Loading the export encoder (about 31 MB)…', 0.02);
+            if (showStatus) setExportStatus('Loading the export encoder (about 31 MB)…', 0.02);
             const ffmpeg = new BrowserFFmpeg();
             const [coreSource, wasmBytes] = await Promise.all([
                 fetchAsText(`${CORE_BASE_URL}/ffmpeg-core.js`),
@@ -232,21 +216,402 @@ async function getEncoder() {
     return encoderPromise;
 }
 
-async function captureFrames(ffmpeg, format, duration, requestedWidth) {
-    if (!window.htmlToImage) throw new Error('The capture library did not load.');
+function getTransformMatrix(element) {
+    const transform = getComputedStyle(element).transform;
+    return transform && transform !== 'none'
+        ? new DOMMatrixReadOnly(transform)
+        : new DOMMatrixReadOnly();
+}
 
+function getScaleFromTransform(element) {
+    const matrix = getTransformMatrix(element);
+    return {
+        x: Math.hypot(matrix.a, matrix.b) || 1,
+        y: Math.hypot(matrix.c, matrix.d) || 1,
+    };
+}
+
+function getDigitRenderState(digit) {
+    const line = digit.closest('.shinigamiEyes__Line');
+    const inner = digit.closest('.shinigamiEyes__Line__InnerContainer');
+    const container = digit.closest('.shinigamiEyes__Line__Container');
+    const lineScale = getScaleFromTransform(line);
+    const containerScale = getScaleFromTransform(container);
+    const ancestorScale = {
+        x: lineScale.x * containerScale.x,
+        y: lineScale.y * containerScale.y,
+    };
+    const opacity = [container, inner, line, digit].reduce(
+        (value, element) => value * Number(getComputedStyle(element).opacity || 1),
+        1,
+    );
+    const filters = [container, inner, line, digit]
+        .map((element) => getComputedStyle(element).filter)
+        .filter((filter) => filter && filter !== 'none');
+    const computed = getComputedStyle(digit);
+
+    return {
+        ancestorScale,
+        char: digit.dataset.char,
+        digit,
+        digitMatrix: getTransformMatrix(digit),
+        filters,
+        fontFamily: computed.fontFamily,
+        fontSize: Number.parseFloat(computed.fontSize),
+        fontStyle: computed.fontStyle,
+        fontWeight: computed.fontWeight,
+        noGlow: digit.classList.contains('shinigamiEyes__Line__Digit--noGlow'),
+        opacity,
+        renderBlur: filters.reduce((largest, filter) => {
+            const matches = Array.from(filter.matchAll(/blur\(([\d.]+)px\)/g));
+            return Math.max(largest, ...matches.map((match) => Number(match[1])), 0);
+        }, 0),
+        colorFilter: filters
+            .map((filter) => filter.replace(/blur\([^)]+\)/g, '').trim())
+            .filter((filter) => filter && filter !== 'none'
+                && filter !== 'hue-rotate(0deg)'
+                && filter !== 'brightness(1)'
+                && filter !== 'saturate(1)')
+            .join(' ') || 'none',
+    };
+}
+
+function combineLinearTransform(state, child) {
+    const matrix = child
+        ? state.digitMatrix.multiply(getTransformMatrix(child))
+        : state.digitMatrix;
+    return {
+        a: matrix.a * state.ancestorScale.x,
+        b: matrix.b * state.ancestorScale.y,
+        c: matrix.c * state.ancestorScale.x,
+        d: matrix.d * state.ancestorScale.y,
+    };
+}
+
+function getLayerCenter(element, stageRect) {
+    const rect = element.getBoundingClientRect();
+    return {
+        x: rect.left + rect.width / 2 - stageRect.left,
+        y: rect.top + rect.height / 2 - stageRect.top,
+    };
+}
+
+const GLYPH_TEXTURE_SIZE = 320;
+const GLYPH_TEXTURE_FONT_SIZE = 100;
+const glyphTextureCache = new Map();
+
+function createGlyphTexture(state, kind) {
+    const baseBlur = { core: 0, echo: 3, trail: 5, slice: 3.8 }[kind] || 0;
+    const blur = Math.round((baseBlur + state.renderBlur) * 2) / 2;
+    const key = [
+        state.char, state.fontFamily, state.fontStyle, state.fontWeight,
+        kind, state.noGlow, blur,
+    ].join('|');
+    const cached = glyphTextureCache.get(key);
+    if (cached) return cached;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = GLYPH_TEXTURE_SIZE;
+    canvas.height = GLYPH_TEXTURE_SIZE;
+    const ctx = canvas.getContext('2d');
+    const scale = GLYPH_TEXTURE_FONT_SIZE / state.fontSize;
+    const bakedBlur = blur * scale;
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.font = `${state.fontStyle} ${state.fontWeight} ${GLYPH_TEXTURE_FONT_SIZE}px ${state.fontFamily}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    const metrics = ctx.measureText(state.char);
+    const baseline = (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
+
+    if (bakedBlur > 0) ctx.filter = `blur(${bakedBlur}px)`;
+
+    if (kind === 'core') {
+        if (!state.noGlow) {
+            ctx.fillStyle = 'rgba(255, 92, 108, 0.72)';
+            ctx.shadowColor = '#ff4e5e';
+            ctx.shadowBlur = 22;
+            ctx.fillText(state.char, 0, baseline);
+            ctx.fillStyle = 'rgba(255, 208, 214, 0.88)';
+            ctx.shadowColor = '#ff7180';
+            ctx.shadowBlur = 10;
+            ctx.fillText(state.char, 0, baseline);
+        }
+        ctx.fillStyle = '#ffe1e1';
+        ctx.shadowColor = state.noGlow ? 'transparent' : '#ffffff';
+        ctx.shadowBlur = state.noGlow ? 0 : 3;
+        ctx.fillText(state.char, 0, baseline);
+    } else if (kind === 'echo') {
+        ctx.fillStyle = '#ffc7cd';
+        ctx.shadowColor = state.noGlow ? 'transparent' : '#ff6978';
+        ctx.shadowBlur = state.noGlow ? 0 : 12;
+        ctx.fillText(state.char, 0, baseline);
+    } else if (kind === 'trail') {
+        const gradient = ctx.createLinearGradient(0, -45, 0, 72);
+        gradient.addColorStop(0, '#ffb4bd');
+        gradient.addColorStop(0.48, '#ff8998');
+        gradient.addColorStop(1, 'rgba(255, 80, 98, 0)');
+        ctx.fillStyle = gradient;
+        ctx.shadowColor = state.noGlow ? 'transparent' : '#ff485a';
+        ctx.shadowBlur = state.noGlow ? 0 : 12;
+        ctx.fillText(state.char, 0, baseline);
+    } else {
+        ctx.fillStyle = '#ffc0c5';
+        ctx.shadowColor = state.noGlow ? 'transparent' : '#ff5868';
+        ctx.shadowBlur = state.noGlow ? 0 : 10;
+        ctx.fillText(state.char, 0, baseline);
+    }
+
+    glyphTextureCache.set(key, canvas);
+    return canvas;
+}
+
+function drawGlyph(ctx, state, options) {
+    const {
+        center,
+        matrix,
+        opacity,
+        textureKind = 'slice',
+        blur = 0,
+        clip,
+    } = options;
+
+    if (opacity <= 0.001) return;
+    const texture = createGlyphTexture(state, textureKind);
+    const textureExtent = GLYPH_TEXTURE_SIZE * state.fontSize / GLYPH_TEXTURE_FONT_SIZE;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, Math.max(0, opacity));
+    ctx.filter = state.colorFilter;
+    ctx.translate(center.x, center.y);
+    ctx.transform(matrix.a, matrix.b, matrix.c, matrix.d, 0, 0);
+
+    if (clip) {
+        const glyphHeight = state.fontSize;
+        ctx.beginPath();
+        ctx.rect(
+            -state.fontSize,
+            -glyphHeight / 2 + glyphHeight * clip.top,
+            state.fontSize * 2,
+            glyphHeight * (clip.bottom - clip.top),
+        );
+        ctx.clip();
+    }
+
+    ctx.drawImage(
+        texture,
+        -textureExtent / 2,
+        -textureExtent / 2,
+        textureExtent,
+        textureExtent,
+    );
+    ctx.restore();
+}
+
+function drawHaze(ctx, state, center, attractor) {
+    const deltaX = attractor.x - center.x;
+    const deltaY = attractor.y - center.y;
+    const distance = Math.hypot(deltaX, deltaY) || 1;
+    const length = Math.min(distance * 0.68, 170);
+    const gradient = ctx.createLinearGradient(0, 0, 0, length);
+    gradient.addColorStop(0, 'rgba(255, 122, 136, 0.24)');
+    gradient.addColorStop(0.42, 'rgba(255, 78, 96, 0.13)');
+    gradient.addColorStop(1, 'rgba(255, 45, 70, 0)');
+
+    ctx.save();
+    ctx.globalAlpha = state.opacity;
+    ctx.filter = state.colorFilter;
+    ctx.translate(center.x, center.y + state.fontSize * 0.12);
+    ctx.rotate(Math.atan2(deltaY, deltaX) - Math.PI / 2);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(-state.fontSize * 0.13, 0, state.fontSize * 0.26, length);
+    ctx.restore();
+}
+
+function drawCore(ctx, state, core, stageRect) {
+    const center = getLayerCenter(core, stageRect);
+    const matrix = combineLinearTransform(state);
+    const coreOpacity = state.opacity * Number(getComputedStyle(core).opacity || 1);
+
+    drawGlyph(ctx, state, {
+        center, matrix, opacity: coreOpacity, textureKind: 'core',
+    });
+}
+
+function drawEchoes(ctx, state, stageRect, attractor) {
+    state.digit.querySelectorAll('.shinigamiEyes__GlyphEcho').forEach((echo) => {
+        const center = getLayerCenter(echo, stageRect);
+        const matrix = combineLinearTransform(state, echo);
+        const depth = echo.vanishingDepth || 0.5;
+        const opacity = state.opacity * Number(getComputedStyle(echo).opacity || 0);
+        const deltaX = attractor.x - center.x;
+        const deltaY = attractor.y - center.y;
+        const distance = Math.hypot(deltaX, deltaY) || 1;
+        const smearLength = Math.min(distance * (0.1 + depth * 0.06), 55);
+        const blur = Number.parseFloat(echo.style.getPropertyValue('--echo-blur')) || 2;
+
+        for (let sample = 2; sample >= 1; sample--) {
+            const progress = sample / 2;
+            drawGlyph(ctx, state, {
+                center: {
+                    x: center.x + deltaX / distance * smearLength * progress,
+                    y: center.y + deltaY / distance * smearLength * progress,
+                },
+                matrix,
+                opacity: opacity * 0.3 * (1 - progress * 0.65),
+                textureKind: 'echo',
+                blur: blur + progress * 4,
+            });
+        }
+
+        drawGlyph(ctx, state, {
+            center, matrix, opacity, textureKind: 'echo', blur,
+        });
+    });
+}
+
+function drawTrails(ctx, state, stageRect, attractor) {
+    state.digit.querySelectorAll('.shinigamiEyes__GlyphTrail').forEach((trail, index) => {
+        const center = getLayerCenter(trail, stageRect);
+        const matrix = combineLinearTransform(state, trail);
+        const opacity = state.opacity * Number(getComputedStyle(trail).opacity || 0);
+        const deltaX = attractor.x - center.x;
+        const deltaY = attractor.y - center.y;
+        const distance = Math.hypot(deltaX, deltaY) || 1;
+        const smearLength = Math.min(distance * (0.28 + index * 0.08), 150);
+        const blur = index === 0 ? 5 : 7;
+
+        for (let sample = 3; sample >= 1; sample--) {
+            const progress = sample / 3;
+            drawGlyph(ctx, state, {
+                center: {
+                    x: center.x + deltaX / distance * smearLength * progress,
+                    y: center.y + deltaY / distance * smearLength * progress,
+                },
+                matrix,
+                opacity: opacity * 0.42 * (1 - progress * 0.7),
+                textureKind: 'trail',
+                blur: blur + progress * 6,
+            });
+        }
+
+        drawGlyph(ctx, state, {
+            center, matrix, opacity, textureKind: 'trail', blur,
+        });
+    });
+}
+
+function getSliceClip(slice) {
+    const clipPath = slice.firstElementChild?.style.clipPath || '';
+    const match = clipPath.match(/inset\(([\d.]+)%[^)]*?([\d.]+)%/);
+    if (!match) return undefined;
+    return {
+        top: Number(match[1]) / 100,
+        bottom: 1 - Number(match[2]) / 100,
+    };
+}
+
+function drawSlices(ctx, state, stageRect, attractor) {
+    state.digit.querySelectorAll('.shinigamiEyes__GlyphSlice').forEach((slice) => {
+        const center = getLayerCenter(slice, stageRect);
+        const matrix = combineLinearTransform(state, slice);
+        const opacity = state.opacity * Number(getComputedStyle(slice).opacity || 0);
+        const deltaX = attractor.x - center.x;
+        const deltaY = attractor.y - center.y;
+        const distance = Math.hypot(deltaX, deltaY) || 1;
+        const smearLength = Math.min(distance * 0.18, 88);
+        const clip = getSliceClip(slice);
+
+        for (let sample = 1; sample >= 1; sample--) {
+            const progress = sample;
+            drawGlyph(ctx, state, {
+                center: {
+                    x: center.x + deltaX / distance * smearLength * progress,
+                    y: center.y + deltaY / distance * smearLength * progress,
+                },
+                matrix,
+                opacity: opacity * 0.25 * (1 - progress * 0.65),
+                textureKind: 'slice',
+                blur: 4 + progress * 5,
+                clip,
+            });
+        }
+
+        drawGlyph(ctx, state, {
+            center, matrix, opacity, textureKind: 'slice', blur: 3.8, clip,
+        });
+    });
+}
+
+function renderExportCanvas(stage, crop, outputSize, backgroundColor, canvas) {
+    const ctx = canvas.getContext('2d', { alpha: backgroundColor === 'transparent' });
+    if (!ctx) throw new Error('The browser could not create the export canvas.');
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.filter = 'none';
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+    if (backgroundColor !== 'transparent') {
+        ctx.fillStyle = backgroundColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    const stageRect = stage.getBoundingClientRect();
+    ctx.setTransform(
+        outputSize.width / crop.width,
+        0,
+        0,
+        outputSize.height / crop.height,
+        -crop.left * outputSize.width / crop.width,
+        -crop.top * outputSize.height / crop.height,
+    );
+
+    const states = Array.from(stage.querySelectorAll('.shinigamiEyes__Line__Digit'))
+        .map(getDigitRenderState);
+    const bounds = states.map(({ digit }) => digit.getBoundingClientRect());
+    const attractor = {
+        x: (Math.min(...bounds.map((rect) => rect.left))
+            + Math.max(...bounds.map((rect) => rect.right))) / 2 - stageRect.left,
+        y: Math.max(...bounds.map((rect) => rect.bottom)) + 140 - stageRect.top,
+    };
+
+    states.forEach((state) => {
+        const core = state.digit.querySelector('.shinigamiEyes__GlyphCore');
+        const center = getLayerCenter(core, stageRect);
+        drawHaze(ctx, state, center, attractor);
+    });
+    states.forEach((state) => drawTrails(ctx, state, stageRect, attractor));
+    states.forEach((state) => drawSlices(ctx, state, stageRect, attractor));
+    states.forEach((state) => drawEchoes(ctx, state, stageRect, attractor));
+    states.forEach((state) => {
+        const core = state.digit.querySelector('.shinigamiEyes__GlyphCore');
+        drawCore(ctx, state, core, stageRect);
+    });
+
+    return canvas;
+}
+
+async function captureFrames(encoderTask, format, duration, requestedWidth) {
     const stage = document.getElementById('animationStage');
     const crop = getExportCrop();
     const outputSize = getOutputSize(crop, requestedWidth);
     const frameCount = Math.max(1, Math.round(duration * EXPORT_FPS));
     const frameInterval = 1000 / EXPORT_FPS;
-    const fontEmbedCSS = await getFontEmbedCSS(stage);
+    const rawByteLength = outputSize.width * outputSize.height * 4 * frameCount;
+    const useRawFrames = rawByteLength <= MAX_RAW_FRAME_BYTES;
+    const rawFrames = useRawFrames ? new Uint8Array(rawByteLength) : null;
+    await document.fonts.ready;
     const backgroundColor = format === 'gif'
         ? '#000000'
         : format === 'mp4'
         ? (getComputedStyle(document.body).backgroundColor || '#000')
         : 'transparent';
     const frameNames = [];
+    const renderCanvas = document.createElement('canvas');
+    renderCanvas.width = outputSize.width;
+    renderCanvas.height = outputSize.height;
     const animationClock = window.shinigamiAnimationClock;
     const timelineStartedAt = animationClock ? animationClock.begin() : performance.now();
     const cssAnimations = typeof stage.getAnimations === 'function'
@@ -272,28 +637,35 @@ async function captureFrames(ffmpeg, format, duration, requestedWidth) {
                 0.08 + (index + 1) / frameCount * 0.64,
             );
 
-            const canvas = await window.htmlToImage.toCanvas(stage, {
-                width: crop.width,
-                height: crop.height,
-                canvasWidth: outputSize.width,
-                canvasHeight: outputSize.height,
-                pixelRatio: 1,
+            const canvas = renderExportCanvas(
+                stage,
+                crop,
+                outputSize,
                 backgroundColor,
-                fontEmbedCSS,
-                skipFonts: fontEmbedCSS === null,
-                preferredFontFormat: 'truetype',
-                style: {
-                    width: `${crop.stageWidth}px`,
-                    height: `${crop.stageHeight}px`,
-                    transform: `translate(${-crop.left}px, ${-crop.top}px)`,
-                    transformOrigin: 'top left',
-                    overflow: 'visible',
-                },
-            });
+                renderCanvas,
+            );
+            if (rawFrames) {
+                const pixels = canvas.getContext('2d').getImageData(
+                    0,
+                    0,
+                    outputSize.width,
+                    outputSize.height,
+                ).data;
+                rawFrames.set(pixels, index * outputSize.width * outputSize.height * 4);
+            } else {
+                const frameName = `shinigami-frame-${String(index).padStart(3, '0')}.png`;
+                const blob = await canvasToPngBlob(canvas);
+                const ffmpeg = await encoderTask;
+                await ffmpeg.writeFile(frameName, await blobToBytes(blob));
+                frameNames.push(frameName);
+            }
+        }
 
-            const frameName = `shinigami-frame-${String(index).padStart(3, '0')}.png`;
-            const blob = await canvasToPngBlob(canvas);
-            await ffmpeg.writeFile(frameName, await blobToBytes(blob));
+        if (rawFrames) {
+            const frameName = 'shinigami-frames.rgba';
+            setExportStatus('Preparing frames for the encoder…', 0.72);
+            const ffmpeg = await encoderTask;
+            await ffmpeg.writeFile(frameName, rawFrames);
             frameNames.push(frameName);
         }
     } finally {
@@ -303,14 +675,22 @@ async function captureFrames(ffmpeg, format, duration, requestedWidth) {
         });
     }
 
-    return { frameNames, frameCount, outputSize };
+    return { frameNames, frameCount, outputSize, useRawFrames };
 }
 
-function getEncoderArguments(format, outputName) {
-    const input = [
-        '-framerate', String(EXPORT_FPS),
-        '-i', 'shinigami-frame-%03d.png',
-    ];
+function getEncoderArguments(format, outputName, outputSize, useRawFrames) {
+    const input = useRawFrames
+        ? [
+            '-f', 'rawvideo',
+            '-pixel_format', 'rgba',
+            '-video_size', `${outputSize.width}x${outputSize.height}`,
+            '-framerate', String(EXPORT_FPS),
+            '-i', 'shinigami-frames.rgba',
+        ]
+        : [
+            '-framerate', String(EXPORT_FPS),
+            '-i', 'shinigami-frame-%03d.png',
+        ];
 
     if (format === 'gif') {
         return [
@@ -328,7 +708,7 @@ function getEncoderArguments(format, outputName) {
             ...input,
             '-c:v', 'libwebp_anim',
             '-lossless', '1',
-            '-compression_level', '4',
+            '-compression_level', '0',
             '-pix_fmt', 'rgba',
             '-loop', '0',
             outputName,
@@ -369,19 +749,25 @@ async function exportAnimation(format) {
     try {
         const duration = Number(document.getElementById('exportDuration').value);
         const requestedWidth = Number(document.getElementById('exportResolution').value);
-        const ffmpeg = await getEncoder();
-        const { frameNames, frameCount, outputSize } = await captureFrames(
-            ffmpeg,
+        const encoderTask = getEncoder();
+        const { frameNames, frameCount, outputSize, useRawFrames } = await captureFrames(
+            encoderTask,
             format,
             duration,
             requestedWidth,
         );
+        const ffmpeg = await encoderTask;
         encoderFiles.push(...frameNames);
 
         const outputName = `shinigami-output.${format}`;
         encoderFiles.push(outputName);
         setExportStatus(`Encoding ${format.toUpperCase()}…`, 0.76);
-        const exitCode = await ffmpeg.exec(getEncoderArguments(format, outputName));
+        const exitCode = await ffmpeg.exec(getEncoderArguments(
+            format,
+            outputName,
+            outputSize,
+            useRawFrames,
+        ));
         if (exitCode !== 0) throw new Error(`The ${format.toUpperCase()} encoder exited with code ${exitCode}.`);
 
         const output = await ffmpeg.readFile(outputName);
@@ -406,3 +792,13 @@ async function exportAnimation(format) {
 document.querySelectorAll('[data-export-format]').forEach((button) => {
     button.addEventListener('click', () => exportAnimation(button.dataset.exportFormat));
 });
+
+// Download and compile the encoder in its worker while the user configures the
+// effect, so this startup cost is usually already gone by the time Export is
+// pressed. A failed prewarm is harmless; an explicit export retries it.
+const prewarmEncoder = () => getEncoder(false).catch(() => undefined);
+if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(prewarmEncoder, { timeout: 5000 });
+} else {
+    setTimeout(prewarmEncoder, 2500);
+}
