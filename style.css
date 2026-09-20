@@ -133,6 +133,63 @@ input[type="checkbox"] {
     overflow: visible;
 }
 
+select {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 9999px;
+    background-color: rgba(255, 255, 255, 0.144);
+    color: white;
+}
+
+select option {
+    background: #171717;
+}
+
+.exportPanel {
+    display: grid;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.exportPanel h4 {
+    margin-block: 4px;
+}
+
+.exportPanel label {
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+.exportPanel__buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.exportPanel__buttons button:disabled {
+    cursor: wait;
+    opacity: 0.45;
+}
+
+#exportProgress {
+    width: calc(100% - 2rem);
+}
+
+#exportStatus {
+    min-height: 1.2em;
+    margin: 2px 0 0;
+    font-size: 12px;
+    opacity: 0.75;
+}
+
+#animationStage {
+    min-height: 1px;
+    overflow: visible;
+    position: relative;
+    width: 100%;
+}
+
 .shinigamiEyes__Line__Digit::selection {
     background: #ff0000;
     color: white;

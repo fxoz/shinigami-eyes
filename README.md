@@ -17,13 +17,4 @@ The animation took me 4 hours to create, and the customization options as well a
 - Vastly customizable
 - Compatible with the screen recorder [OBS](https://obsproject.com), including the ability to make the background transparent
 - No server-side processing
-- No external libraries
-- No SVG, Canvas or WebGL
 
-## Limitations
-
-Because of my choice to not use SVG, Canvas or WebGL, the animation is not as smooth and accurate as it could be. Thus, the following limitations apply:
-
-- No distortion or motion blur effect
-- Performance may vary depending on the device
-- High settings & effects may cause stuttering

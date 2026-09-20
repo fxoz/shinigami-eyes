@@ -25,6 +25,32 @@
         <input type="text" id="lineInput" placeholder="Enter a line" autocomplete="off">
         <button onclick="addLineTriggered();">Add line</button>
         <button onclick="clearAll();" style="color: #ffb2b2;">Delete all lines</button>
+        <div class="exportPanel">
+            <h4>Export Animation</h4>
+            <label for="exportDuration">Duration</label>
+            <select id="exportDuration">
+                <option value="2">2 seconds</option>
+                <option value="3" selected>3 seconds</option>
+                <option value="5">5 seconds</option>
+                <option value="8">8 seconds</option>
+            </select>
+
+            <label for="exportResolution">Resolution</label>
+            <select id="exportResolution">
+                <option value="480">480 px wide</option>
+                <option value="720" selected>720 px wide</option>
+                <option value="1080">1080 px wide</option>
+                <option value="1440">1440 px wide</option>
+            </select>
+
+            <div class="exportPanel__buttons">
+                <button type="button" data-export-format="gif">Export as GIF</button>
+                <button type="button" data-export-format="mp4">Export as MP4</button>
+                <button type="button" data-export-format="webp">Export as WebP</button>
+            </div>
+            <progress id="exportProgress" value="0" max="1" hidden></progress>
+            <p id="exportStatus" role="status" aria-live="polite"></p>
+        </div>
         <hr />
         <h3>Configuration</h3>
         <button onclick="window.location.reload();">Reset <i>everything</i></button>
@@ -108,9 +134,13 @@
         </div>
     </aside>
 
+    <main id="animationStage" aria-label="Shinigami Eyes animation"></main>
+
     <script type="text/javascript" src="index.js"></script>
     <script src="general-config.js"></script>
     <script src="style-config.js"></script>
+    <script src="assets/vendor/html-to-image.js"></script>
+    <script src="export.js"></script>
 </body>
 
 </html>

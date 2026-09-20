@@ -32,10 +32,10 @@ function generateDigitStyles() {
     return {
         paddingLeft: `${Math.random() * 6 + SETTINGS.MIN_PADDING / 2}px`,
         paddingRight: `${Math.random() * 6 + SETTINGS.MIN_PADDING / 2}px`,
-        rotation: Math.random() * 24 - 12,
-        translateY: Math.random() * 10 - 5,
-        scaleX: Math.random() * 0.6 + 0.7,
-        fontSize: `${Math.random() * 35 + 55}px`,
+        rotation: Math.random() * 40 - 20,
+        translateY: Math.random() * 16 - 8,
+        scaleX: Math.random() * 0.96 + 0.52,
+        fontSize: `${Math.random() * 54 + 48}px`,
         opacity: SETTINGS.MIN_OPACITY + Math.random() * (1 - SETTINGS.MIN_OPACITY),
     };
 }
@@ -340,13 +340,14 @@ function createContainer(chars, scale, topOffset, opacity, reuseStyles, storedSt
 }
 
 function initRender(text) {
+    const animationStage = document.getElementById('animationStage') || document.body;
     const outerContainer = document.createElement('div');
     outerContainer.className = 'shinigamiEyes__Line__Container';
-    document.body.appendChild(outerContainer);
+    animationStage.appendChild(outerContainer);
 
     const innerContainer = document.createElement('div');
     innerContainer.className = 'shinigamiEyes__Line__InnerContainer';
-    document.body.appendChild(innerContainer);
+    outerContainer.appendChild(innerContainer);
 
     const chars = text.replace(" ", "⠀").split('');
     const storedStyles = [];
@@ -360,7 +361,6 @@ function initRender(text) {
     for (let i = 0; i < AMOUNT; i++) {
         const container = createContainer(chars, scale, topOffset, opacity, i > 0, storedStyles);
         innerContainer.appendChild(container);
-        outerContainer.appendChild(innerContainer);
         const digits = container.querySelectorAll('.shinigamiEyes__Line__Digit');
         digits.forEach((digit) => {
             allDigits.push(digit);
@@ -392,6 +392,9 @@ function interpolateStyles(startStyles, endStyles, progress) {
     };
 }
 
+const digitAnimationControllers = new Set();
+let exportAnimationTimestamp;
+
 function animateDigits(digits) {
     const animationStates = digits.map((digit) => ({
         digit,
@@ -402,9 +405,9 @@ function animateDigits(digits) {
     }));
     let previousTimestamp;
 
-    function animateFrame(timestamp) {
+    function renderAt(timestamp) {
         const activeStates = animationStates.filter(({ digit }) => digit.isConnected);
-        if (activeStates.length === 0) return;
+        if (activeStates.length === 0) return false;
 
         if (!SETTINGS.ANIMATE) {
             const pausedDuration = timestamp - (previousTimestamp ?? timestamp);
@@ -412,8 +415,7 @@ function animateDigits(digits) {
                 if (state.segmentStart !== undefined) state.segmentStart += pausedDuration;
             });
             previousTimestamp = timestamp;
-            requestAnimationFrame(animateFrame);
-            return;
+            return true;
         }
 
         previousTimestamp = timestamp;
@@ -437,11 +439,51 @@ function animateDigits(digits) {
             applyStyles(state.digit, interpolateStyles(state.startStyles, state.endStyles, progress));
         });
 
+        return true;
+    }
+
+    const controller = {
+        renderAt,
+        shiftTimeline(delta) {
+            animationStates.forEach((state) => {
+                if (state.segmentStart !== undefined) state.segmentStart += delta;
+            });
+            if (previousTimestamp !== undefined) previousTimestamp += delta;
+        },
+    };
+    digitAnimationControllers.add(controller);
+
+    function animateFrame(timestamp) {
+        if (!animationStates.some(({ digit }) => digit.isConnected)) {
+            digitAnimationControllers.delete(controller);
+            return;
+        }
+
+        if (exportAnimationTimestamp === undefined) renderAt(timestamp);
         requestAnimationFrame(animateFrame);
     }
 
     requestAnimationFrame(animateFrame);
 }
+
+window.shinigamiAnimationClock = {
+    begin() {
+        exportAnimationTimestamp = performance.now();
+        digitAnimationControllers.forEach((controller) => controller.renderAt(exportAnimationTimestamp));
+        return exportAnimationTimestamp;
+    },
+    seek(timestamp) {
+        exportAnimationTimestamp = timestamp;
+        digitAnimationControllers.forEach((controller) => controller.renderAt(timestamp));
+    },
+    end() {
+        if (exportAnimationTimestamp === undefined) return;
+        const resumedAt = performance.now();
+        const timelineShift = resumedAt - exportAnimationTimestamp;
+        digitAnimationControllers.forEach((controller) => controller.shiftTimeline(timelineShift));
+        exportAnimationTimestamp = undefined;
+    },
+};
 
 let lastAttractorUpdate = 0;
 
