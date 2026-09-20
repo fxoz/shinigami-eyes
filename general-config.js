@@ -1,43 +1,34 @@
-document.addEventListener('DOMContentLoaded', () => {
-    if (!window.navigator.userAgent.includes('Chrome')) {
-        document.getElementById('chromeWarning').style.display = 'none'
-    }
+const renderer = window.shinigamiRenderer;
 
-    initRender('夜神月');
-    initRender('93312639');
-    enableGlow();
+document.addEventListener('DOMContentLoaded', async () => {
+    if (!window.navigator.userAgent.includes('Chrome')) {
+        document.getElementById('chromeWarning').style.display = 'none';
+    }
+    await document.fonts.ready;
+    renderer.widthCache.clear();
+    renderer.textureCache.clear();
+    renderer.addLine('夜神月');
+    renderer.addLine('93312639');
     updateTextPreview();
 });
 
+function initRender(text) {
+    renderer.addLine(text);
+}
 
 function addLine(text) {
-    initRender(text);
-    if (document.getElementById('glowCheckbox').checked) {
-        enableGlow();
-    }
+    renderer.addLine(text);
     updateTextPreview();
 }
 
 function addLineTriggered() {
-    if (!document.getElementById('lineInput').value) {
-        return;
-    }
-    addLine(document.getElementById('lineInput').value);
+    const input = document.getElementById('lineInput');
+    if (!input.value) return;
+    addLine(input.value);
 }
 
 function getLinesText() {
-    const linesText = [];
-    for (const lineElement of document.querySelectorAll('.shinigamiEyes__Line')) {
-        if (!lineElement.classList.contains('shinigamiEyes__Line--reused')) {
-            const text = Array.from(
-                lineElement.children,
-                (digit) => digit.dataset.char,
-            ).join('');
-            linesText.push(text);
-        }
-    }
-
-    return linesText;
+    return renderer.getLines();
 }
 
 function updateTextPreview() {
@@ -45,34 +36,89 @@ function updateTextPreview() {
 }
 
 function reapply() {
-    const savedLines = getLinesText();
-    clearAll();
-    for (line of savedLines) {
-        addLine(line);
-    };
-    reapplyRecommended.style.display = 'none';
+    renderer.reapply();
+    updateTextPreview();
+    document.getElementById('reapplyRecommended').style.display = 'none';
 }
 
-document.getElementById('instancesSlider').addEventListener('input', (e) => {
-    SETTINGS.CLONES.AMOUNT = e.target.value;
-    reapplyRecommended.style.display = 'block';
+document.getElementById('instancesSlider').addEventListener('input', (event) => {
+    SETTINGS.CLONES.AMOUNT = Number(event.target.value);
+    document.getElementById('reapplyRecommended').style.display = 'block';
 });
 
 function toggleGui() {
-    toggleGuiButton.innerText = toggleGuiButton.innerText === 'Hide Settings' ? 'Show Settings' : 'Hide Settings';
+    const button = document.getElementById('toggleGuiButton');
+    button.innerText = button.innerText === 'Hide Settings' ? 'Show Settings' : 'Hide Settings';
     const gui = document.querySelector('aside');
     gui.style.display = gui.style.display === 'none' ? 'block' : 'none';
 }
 
 function makeTransparent() {
-    document.querySelector('body').style.backgroundColor = 'transparent';
+    document.body.style.backgroundColor = 'transparent';
+    renderer.invalidate();
 }
 
 function clearAll() {
-    for (container of document.querySelectorAll('.shinigamiEyes__Line__Container'))
-        container.remove();
+    renderer.clear();
     updateTextPreview();
-};
+}
 
+document.getElementById('toggleGuiButton').addEventListener('click', toggleGui);
 
-toggleGuiButton.addEventListener('click', toggleGui);
+document.getElementById('digitBlurCheckbox').addEventListener('change', (event) => {
+    renderer.setOption('digitBlur', event.target.checked);
+});
+
+document.getElementById('animateCheckbox').addEventListener('change', (event) => {
+    setAnimation(event.target.checked);
+});
+
+document.getElementById('outlineLettersCheckbox').addEventListener('change', (event) => {
+    renderer.setOption('outline', event.target.checked);
+});
+
+document.getElementById('containerHeightSlider').addEventListener('input', (event) => {
+    renderer.setOption('containerHeight', Number(event.target.value));
+});
+
+document.getElementById('spacingSlider').addEventListener('input', (event) => {
+    SETTINGS.MIN_PADDING = Number(event.target.value);
+});
+
+document.getElementById('opacityMinSlider').addEventListener('input', (event) => {
+    SETTINGS.MIN_OPACITY = Number(event.target.value) / 100;
+});
+
+document.getElementById('sizeSlider').addEventListener('input', (event) => {
+    renderer.setOption('size', Number(event.target.value) / 100);
+});
+
+document.getElementById('hueSlider').addEventListener('input', (event) => {
+    renderer.setOption('hue', Number(event.target.value));
+});
+
+document.getElementById('brightnessSlider').addEventListener('input', (event) => {
+    renderer.setOption('brightness', Number(event.target.value));
+});
+
+document.getElementById('opacitySlider').addEventListener('input', (event) => {
+    renderer.setOption('opacity', Number(event.target.value) / 100);
+});
+
+document.getElementById('glowCheckbox').addEventListener('change', (event) => {
+    renderer.setOption('glow', event.target.checked);
+});
+
+document.getElementById('saturationSlider').addEventListener('input', (event) => {
+    renderer.setOption('saturation', Number(event.target.value));
+});
+
+document.getElementById('transitionDurationSlider').addEventListener('input', (event) => {
+    const slider = event.target;
+    SETTINGS.TRANSITION_DURATION_MS = Number(slider.max) + Number(slider.min)
+        - Number(slider.value);
+});
+
+document.getElementById('intensitySlider').addEventListener('input', (event) => {
+    renderer.setOption('intensity', Number(event.target.value) / 100);
+});

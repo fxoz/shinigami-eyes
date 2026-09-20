@@ -45,12 +45,13 @@ hr {
 
 aside {
     backdrop-filter: blur(5px);
+    box-sizing: border-box;
     padding: 1rem;
     z-index: 500;
     position: fixed;
     overflow-y: scroll;
     height: 100vh;
-    width: var(--sidebar-width);
+    width: min(var(--sidebar-width), calc(100vw - 16px));
     transition: opacity 0.5s;
 }
 
@@ -65,9 +66,15 @@ aside .infoText p {
     opacity: 0.8;
 }
 
-@media screen and (max-width: 1500px) {
+@media screen and (max-width: 600px) {
     aside {
-        display: static;
+        background: rgba(0, 0, 0, 0.72);
+        height: 100dvh;
+    }
+
+    #toggleGuiButton {
+        top: .5rem;
+        right: .5rem;
     }
 }
 
@@ -185,9 +192,18 @@ select option {
 
 #animationStage {
     min-height: 1px;
-    overflow: visible;
+    overflow: hidden;
     position: relative;
     width: 100%;
+}
+
+.shinigamiEyes__Canvas {
+    display: block;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    transform: translateZ(0);
 }
 
 .shinigamiEyes__Line__Digit::selection {

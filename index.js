@@ -2,11 +2,10 @@ const SETTINGS = {
     ANIMATE: true,
     MIN_PADDING: 10,
     MIN_OPACITY: 0.3,
-    TRANSITION_DURATION_MS: 3000,
+    TRANSITION_DURATION_MS: 1800,
     DURATION_VARIATION: 0.3,
-    MOLTEN_SLICES: 4,
-    MOLTEN_TRAILS: 2,
-    PERSPECTIVE_ECHOES: 3,
+    MOTION_SPEED: 1.5,
+    MOTION_INTENSITY: 1.4,
     CLONES: {
         AMOUNT: 1,
         OPACITY_MULTIPLIER: 0.7,
@@ -15,478 +14,524 @@ const SETTINGS = {
     },
 };
 
-function setAnimation(status) {
-    SETTINGS.ANIMATE = status;
-    for (const digit of document.querySelectorAll('.shinigamiEyes__Line__Digit')) {
-        digit.classList.toggle('shinigamiEyes__Line__Digit--paused', !status);
-    }
-}
+const TAU = Math.PI * 2;
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const mix = (start, end, amount) => start + (end - start) * amount;
 
-function enableGlow() {
-    for (const digit of document.querySelectorAll('.shinigamiEyes__Line__Digit')) {
-        digit.classList.remove('shinigamiEyes__Line__Digit--noGlow');
-    }
-}
-
-function generateDigitStyles() {
+function randomStyle() {
     return {
-        paddingLeft: `${Math.random() * 6 + SETTINGS.MIN_PADDING / 2}px`,
-        paddingRight: `${Math.random() * 6 + SETTINGS.MIN_PADDING / 2}px`,
+        paddingLeft: Math.random() * 6 + SETTINGS.MIN_PADDING / 2,
+        paddingRight: Math.random() * 6 + SETTINGS.MIN_PADDING / 2,
         rotation: Math.random() * 40 - 20,
         translateY: Math.random() * 16 - 8,
         scaleX: Math.random() * 0.96 + 0.52,
-        fontSize: `${Math.random() * 54 + 48}px`,
+        fontSize: Math.random() * 54 + 48,
         opacity: SETTINGS.MIN_OPACITY + Math.random() * (1 - SETTINGS.MIN_OPACITY),
     };
 }
 
-function generateAnimationDuration() {
-    const baseDuration = Math.max(Number(SETTINGS.TRANSITION_DURATION_MS), 1);
-    const variation = 1 - SETTINGS.DURATION_VARIATION + Math.random() * SETTINGS.DURATION_VARIATION * 2;
-    return baseDuration * variation;
+function randomDuration() {
+    const variation = 1 - SETTINGS.DURATION_VARIATION
+        + Math.random() * SETTINGS.DURATION_VARIATION * 2;
+    return Math.max(Number(SETTINGS.TRANSITION_DURATION_MS), 1) * variation;
 }
 
-function applyStyles(el, styles) {
-    Object.assign(el.style, {
-        paddingLeft: styles.paddingLeft,
-        paddingRight: styles.paddingRight,
-        fontSize: styles.fontSize,
-        opacity: styles.opacity,
-        transform: `rotate(${styles.rotation}deg) translateY(${styles.translateY}px) scaleX(${styles.scaleX})`,
-    });
-}
-
-function createMoltenSlice(char, index) {
-    const slice = document.createElement('span');
-    const ink = document.createElement('span');
-    const depth = (index + 1) / SETTINGS.MOLTEN_SLICES;
-    const top = 10 + index * 22;
-    const bottom = Math.min(top + 18, 100);
-    const duration = 2800 + Math.random() * 2600;
-    const meltX = (Math.random() * 2 - 1) * 3;
-    const meltY = 1 + depth * (3 + Math.random() * 4);
-    const meltStretch = 1.01 + depth * (0.08 + Math.random() * 0.12);
-    const meltSkew = (Math.random() * 2 - 1) * (1 + depth * 2);
-    const sliceOpacity = 0.18 + depth * 0.12;
-
-    slice.className = 'shinigamiEyes__GlyphSlice';
-    slice.setAttribute('aria-hidden', 'true');
-    ink.className = 'shinigamiEyes__GlyphSliceInk';
-    ink.textContent = char;
-    ink.style.clipPath = `inset(${top}% -20% ${100 - bottom}% -20%)`;
-    slice.appendChild(ink);
-    slice.style.animationDuration = `${duration}ms`;
-    slice.style.animationDelay = `${-Math.random() * duration}ms`;
-    slice.style.setProperty('--melt-x-start', `${meltX * -0.45}px`);
-    slice.style.setProperty('--melt-x-mid', `${meltX * 0.65}px`);
-    slice.style.setProperty('--melt-x-end', `${meltX}px`);
-    slice.style.setProperty('--melt-x-relax', `${meltX * -0.2}px`);
-    slice.style.setProperty('--melt-y-mid', `${meltY * 0.3}px`);
-    slice.style.setProperty('--melt-y-end', `${meltY}px`);
-    slice.style.setProperty('--melt-y-relax', `${meltY * 0.18}px`);
-    slice.style.setProperty('--melt-stretch-mid', 1 + (meltStretch - 1) * 0.35);
-    slice.style.setProperty('--melt-stretch-end', meltStretch);
-    slice.style.setProperty('--melt-skew-start', `${meltSkew * -0.35}deg`);
-    slice.style.setProperty('--melt-skew-mid', `${meltSkew * 0.45}deg`);
-    slice.style.setProperty('--melt-skew-end', `${meltSkew}deg`);
-    slice.style.setProperty('--melt-skew-relax', `${meltSkew * -0.2}deg`);
-    slice.style.setProperty('--slice-opacity-low', sliceOpacity * 0.82);
-    slice.style.setProperty('--slice-opacity-soft', sliceOpacity * 0.9);
-    slice.style.setProperty('--slice-opacity-high', sliceOpacity);
-    slice.style.setProperty('--slice-opacity-relaxed', sliceOpacity * 0.96);
-    slice.moltenMotion = { depth, meltX, meltY };
-    return slice;
-}
-
-function createMoltenTrail(char, index) {
-    const trail = document.createElement('span');
-    const duration = 3600 + Math.random() * 2800;
-    const trailX = (Math.random() * 2 - 1) * 2;
-    const trailY = 3 + Math.random() * 4;
-    const trailStretch = 1.04 + Math.random() * 0.08 + index * 0.04;
-    const trailSkew = (Math.random() * 2 - 1) * 2;
-
-    trail.className = `shinigamiEyes__GlyphTrail shinigamiEyes__GlyphTrail--${index + 1}`;
-    trail.textContent = char;
-    trail.setAttribute('aria-hidden', 'true');
-    trail.style.animationDuration = `${duration}ms`;
-    trail.style.animationDelay = `${-Math.random() * duration}ms`;
-    trail.style.setProperty('--trail-x-start', `${trailX * -0.4}px`);
-    trail.style.setProperty('--trail-x-mid', `${trailX * 0.35}px`);
-    trail.style.setProperty('--trail-x-end', `${trailX}px`);
-    trail.style.setProperty('--trail-y-mid', `${trailY * 0.45}px`);
-    trail.style.setProperty('--trail-y-end', `${trailY}px`);
-    trail.style.setProperty('--trail-stretch-mid', trailStretch * 0.72);
-    trail.style.setProperty('--trail-stretch-end', trailStretch);
-    trail.style.setProperty('--trail-skew-start', `${trailSkew * -0.3}deg`);
-    trail.style.setProperty('--trail-skew-mid', `${trailSkew * 0.5}deg`);
-    trail.style.setProperty('--trail-skew-end', `${trailSkew}deg`);
-    trail.style.setProperty('--trail-opacity-start', index === 0 ? 0.1 : 0.055);
-    trail.style.setProperty('--trail-opacity-mid', index === 0 ? 0.24 : 0.15);
-    trail.style.setProperty('--trail-opacity-end', index === 0 ? 0.15 : 0.085);
-    trail.moltenMotion = { depth: 0.7 + index * 0.3, trailX, trailY };
-    return trail;
-}
-
-function createPerspectiveEcho(char, index) {
-    const echo = document.createElement('span');
-    const depth = (index + 1) / SETTINGS.PERSPECTIVE_ECHOES;
-    const scale = 1 - depth * 0.7;
-    const opacity = 0.22 - depth * 0.15;
-
-    echo.className = 'shinigamiEyes__GlyphEcho';
-    echo.textContent = char;
-    echo.setAttribute('aria-hidden', 'true');
-    echo.style.zIndex = SETTINGS.PERSPECTIVE_ECHOES + 2 - index;
-    echo.style.setProperty('--echo-scale', scale);
-    echo.style.setProperty('--echo-opacity-low', opacity * 0.82);
-    echo.style.setProperty('--echo-opacity-high', opacity);
-    echo.style.setProperty('--echo-opacity-relaxed', opacity * 0.92);
-    echo.style.setProperty('--echo-blur', `${1.5 + depth * 2}px`);
-    echo.vanishingDepth = depth;
-    return echo;
-}
-
-function createDirectionalShadow(directionX, directionY, length, opacity) {
-    const samples = 9;
-    const shadows = [];
-
-    for (let index = 1; index <= samples; index++) {
-        const progress = index / samples;
-        const offsetX = directionX * length * progress;
-        const offsetY = directionY * length * progress;
-        const blur = 2 + progress * 12;
-        const sampleOpacity = opacity * (1 - progress * 0.62);
-        shadows.push(`${offsetX}px ${offsetY}px ${blur}px rgba(255, 92, 108, ${sampleOpacity})`);
-    }
-
-    return shadows.join(', ');
-}
-
-function createDirectionalFilter(directionX, directionY, length, opacity) {
-    const samples = 4;
-    const filters = [];
-
-    for (let index = 1; index <= samples; index++) {
-        const progress = index / samples;
-        const offsetX = directionX * length * progress;
-        const offsetY = directionY * length * progress;
-        const blur = 3 + progress * 10;
-        const sampleOpacity = opacity * (1 - progress * 0.58);
-        filters.push(`drop-shadow(${offsetX}px ${offsetY}px ${blur}px rgba(255, 86, 104, ${sampleOpacity}))`);
-    }
-
-    return filters.join(' ');
-}
-
-function createEchoSmear(directionX, directionY, length) {
-    const samples = 5;
-    const shadows = [];
-
-    for (let index = 1; index <= samples; index++) {
-        const progress = index / samples;
-        const offsetX = directionX * length * progress;
-        const offsetY = directionY * length * progress;
-        const blur = 1.5 + progress * 5;
-        const opacity = 0.42 * (1 - progress * 0.7);
-        shadows.push(`${offsetX}px ${offsetY}px ${blur}px rgba(255, 112, 126, ${opacity})`);
-    }
-
-    return shadows.join(', ');
-}
-
-function updateAttractorDirections() {
-    const digits = Array.from(document.querySelectorAll('.shinigamiEyes__Line__Digit'));
-    if (digits.length === 0) return;
-
-    const bounds = digits.map((digit) => digit.getBoundingClientRect());
-    const left = Math.min(...bounds.map((rect) => rect.left));
-    const right = Math.max(...bounds.map((rect) => rect.right));
-    const bottom = Math.max(...bounds.map((rect) => rect.bottom));
-    const attractorX = (left + right) / 2;
-    const attractorY = bottom + 140;
-
-    digits.forEach((digit, digitIndex) => {
-        const rect = bounds[digitIndex];
-        const deltaX = attractorX - (rect.left + rect.width / 2);
-        const deltaY = attractorY - (rect.top + rect.height / 2);
-        const distance = Math.hypot(deltaX, deltaY) || 1;
-        const directionX = deltaX / distance;
-        const directionY = deltaY / distance;
-        const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI - 90;
-
-        digit.style.setProperty('--haze-x-end', `${directionX * 18}px`);
-        digit.style.setProperty('--haze-y-end', `${directionY * 18}px`);
-        digit.style.setProperty('--haze-angle-mid', `${angle * 0.45}deg`);
-        digit.style.setProperty('--haze-angle-end', `${angle}deg`);
-
-        digit.querySelectorAll('.shinigamiEyes__GlyphEcho').forEach((echo) => {
-            const travel = 0.04 + echo.vanishingDepth * 0.42;
-            echo.style.setProperty('--echo-x', `${deltaX * travel}px`);
-            echo.style.setProperty('--echo-y', `${deltaY * travel}px`);
-            echo.style.setProperty(
-                '--echo-smear',
-                createEchoSmear(
-                    directionX,
-                    directionY,
-                    Math.min(distance * (0.1 + echo.vanishingDepth * 0.06), 55),
-                ),
-            );
-        });
-
-        digit.querySelectorAll('.shinigamiEyes__GlyphSlice').forEach((slice) => {
-            const { depth, meltX, meltY } = slice.moltenMotion;
-            const flowDistance = 4 + depth * 8;
-            const flowX = directionX * flowDistance;
-            const flowY = directionY * flowDistance;
-            slice.style.setProperty('--melt-x-mid', `${meltX * 0.4 + flowX * 0.4}px`);
-            slice.style.setProperty('--melt-x-end', `${meltX + flowX}px`);
-            slice.style.setProperty('--melt-y-mid', `${meltY * 0.4 + flowY * 0.4}px`);
-            slice.style.setProperty('--melt-y-end', `${meltY + flowY}px`);
-            slice.style.setProperty('--flow-angle-mid', `${angle * 0.25}deg`);
-            slice.style.setProperty('--flow-angle-end', `${angle * 0.55}deg`);
-            slice.style.setProperty(
-                '--motion-filter',
-                createDirectionalFilter(
-                    directionX,
-                    directionY,
-                    Math.min(distance * (0.32 + depth * 0.12), 130),
-                    0.48,
-                ),
-            );
-        });
-
-        digit.querySelectorAll('.shinigamiEyes__GlyphTrail').forEach((trail) => {
-            const { depth, trailX, trailY } = trail.moltenMotion;
-            const flowDistance = 10 + depth * 9;
-            const flowX = directionX * flowDistance;
-            const flowY = directionY * flowDistance;
-            trail.style.setProperty('--trail-x-mid', `${trailX * 0.3 + flowX * 0.45}px`);
-            trail.style.setProperty('--trail-x-end', `${trailX + flowX}px`);
-            trail.style.setProperty('--trail-y-mid', `${trailY * 0.3 + flowY * 0.45}px`);
-            trail.style.setProperty('--trail-y-end', `${trailY + flowY}px`);
-            trail.style.setProperty('--trail-angle-mid', `${angle * 0.55}deg`);
-            trail.style.setProperty('--trail-angle-end', `${angle}deg`);
-            trail.style.setProperty(
-                '--motion-shadow',
-                createDirectionalShadow(
-                    directionX,
-                    directionY,
-                    Math.min(distance * (0.48 + depth * 0.12), 180),
-                    0.58,
-                ),
-            );
-        });
-    });
-}
-
-function createDigit(char, styles) {
-    const el = document.createElement('span');
-    el.className = 'shinigamiEyes__Line__Digit';
-    el.setAttribute('aria-label', char);
-    el.dataset.char = char;
-
-    const measure = document.createElement('span');
-    measure.className = 'shinigamiEyes__GlyphMeasure';
-    measure.textContent = char;
-    measure.setAttribute('aria-hidden', 'true');
-    el.appendChild(measure);
-
-    const core = document.createElement('span');
-    core.className = 'shinigamiEyes__GlyphCore';
-    core.textContent = char;
-    core.setAttribute('aria-hidden', 'true');
-    el.appendChild(core);
-
-    for (let index = 0; index < SETTINGS.PERSPECTIVE_ECHOES; index++) {
-        el.appendChild(createPerspectiveEcho(char, index));
-    }
-
-    for (let index = 0; index < SETTINGS.MOLTEN_TRAILS; index++) {
-        el.appendChild(createMoltenTrail(char, index));
-    }
-
-    for (let index = 0; index < SETTINGS.MOLTEN_SLICES; index++) {
-        el.appendChild(createMoltenSlice(char, index));
-    }
-
-    if (!SETTINGS.ANIMATE) el.classList.add('shinigamiEyes__Line__Digit--paused');
-    const glowCheckbox = document.getElementById('glowCheckbox');
-    if (glowCheckbox && !glowCheckbox.checked) {
-        el.classList.add('shinigamiEyes__Line__Digit--noGlow');
-    }
-    applyStyles(el, styles);
-    el.initialStyles = styles;
-    return el;
-}
-
-function createContainer(chars, scale, topOffset, opacity, reuseStyles, storedStyles) {
-    const container = document.createElement('div');
-    container.className = 'shinigamiEyes__Line';
-    if (reuseStyles) container.classList.add('shinigamiEyes__Line--reused');
-    Object.assign(container.style, {
-        transform: `scale(${scale})`,
-        top: `${topOffset}px`,
-        opacity,
-    });
-
-    chars.forEach((char, i) => {
-        const styles = reuseStyles ? storedStyles[i] : generateDigitStyles();
-        if (!reuseStyles) storedStyles.push(styles);
-        container.appendChild(createDigit(char, styles));
-    });
-
-    return container;
-}
-
-function initRender(text) {
-    const animationStage = document.getElementById('animationStage') || document.body;
-    const outerContainer = document.createElement('div');
-    outerContainer.className = 'shinigamiEyes__Line__Container';
-    animationStage.appendChild(outerContainer);
-
-    const innerContainer = document.createElement('div');
-    innerContainer.className = 'shinigamiEyes__Line__InnerContainer';
-    outerContainer.appendChild(innerContainer);
-
-    const chars = text.replace(" ", "⠀").split('');
-    const storedStyles = [];
-    const { AMOUNT, SCALE_MULTIPLIER, OPACITY_MULTIPLIER, TOP_OFFSET } = SETTINGS.CLONES;
-    let scale = 1;
-    let topOffset = TOP_OFFSET;
-    let opacity = 1;
-
-    const allDigits = [];
-
-    for (let i = 0; i < AMOUNT; i++) {
-        const container = createContainer(chars, scale, topOffset, opacity, i > 0, storedStyles);
-        innerContainer.appendChild(container);
-        const digits = container.querySelectorAll('.shinigamiEyes__Line__Digit');
-        digits.forEach((digit) => {
-            allDigits.push(digit);
-        });
-
-        scale *= SCALE_MULTIPLIER;
-        topOffset += TOP_OFFSET;
-        opacity *= OPACITY_MULTIPLIER;
-        if (i === 0) opacity = 0.2;
-    }
-
-    setTimeout(() => {
-        updateAttractorDirections();
-        animateDigits(allDigits);
-    }, 20);
-}
-
-function interpolateStyles(startStyles, endStyles, progress) {
-    const interpolate = (start, end) => start + (end - start) * progress;
-
+function interpolateStyle(start, end, amount) {
     return {
-        paddingLeft: `${interpolate(Number.parseFloat(startStyles.paddingLeft), Number.parseFloat(endStyles.paddingLeft))}px`,
-        paddingRight: `${interpolate(Number.parseFloat(startStyles.paddingRight), Number.parseFloat(endStyles.paddingRight))}px`,
-        fontSize: `${interpolate(Number.parseFloat(startStyles.fontSize), Number.parseFloat(endStyles.fontSize))}px`,
-        opacity: interpolate(startStyles.opacity, endStyles.opacity),
-        rotation: interpolate(startStyles.rotation, endStyles.rotation),
-        translateY: interpolate(startStyles.translateY, endStyles.translateY),
-        scaleX: interpolate(startStyles.scaleX, endStyles.scaleX),
+        paddingLeft: mix(start.paddingLeft, end.paddingLeft, amount),
+        paddingRight: mix(start.paddingRight, end.paddingRight, amount),
+        rotation: mix(start.rotation, end.rotation, amount),
+        translateY: mix(start.translateY, end.translateY, amount),
+        scaleX: mix(start.scaleX, end.scaleX, amount),
+        fontSize: mix(start.fontSize, end.fontSize, amount),
+        opacity: mix(start.opacity, end.opacity, amount),
     };
 }
 
-const digitAnimationControllers = new Set();
-let exportAnimationTimestamp;
+function applyMotionIntensity(style, intensity) {
+    const paddingBaseline = SETTINGS.MIN_PADDING / 2 + 3;
+    return {
+        ...style,
+        paddingLeft: paddingBaseline + (style.paddingLeft - paddingBaseline) * intensity,
+        paddingRight: paddingBaseline + (style.paddingRight - paddingBaseline) * intensity,
+        rotation: style.rotation * intensity,
+        translateY: style.translateY * intensity,
+        scaleX: Math.max(0.08, 1 + (style.scaleX - 1) * intensity),
+        fontSize: Math.max(12, 75 + (style.fontSize - 75) * intensity),
+        opacity: clamp(1 + (style.opacity - 1) * intensity, 0, 1),
+    };
+}
 
-function animateDigits(digits) {
-    const animationStates = digits.map((digit) => ({
-        digit,
-        startStyles: digit.initialStyles,
-        endStyles: generateDigitStyles(),
-        duration: generateAnimationDuration(),
-        segmentStart: undefined,
-    }));
-    let previousTimestamp;
-
-    function renderAt(timestamp) {
-        const activeStates = animationStates.filter(({ digit }) => digit.isConnected);
-        if (activeStates.length === 0) return false;
-
-        if (!SETTINGS.ANIMATE) {
-            const pausedDuration = timestamp - (previousTimestamp ?? timestamp);
-            activeStates.forEach((state) => {
-                if (state.segmentStart !== undefined) state.segmentStart += pausedDuration;
-            });
-            previousTimestamp = timestamp;
-            return true;
-        }
-
-        previousTimestamp = timestamp;
-        if (timestamp - lastAttractorUpdate >= 500) {
-            updateAttractorDirections();
-            lastAttractorUpdate = timestamp;
-        }
-        activeStates.forEach((state) => {
-            if (state.segmentStart === undefined) state.segmentStart = timestamp;
-
-            const elapsed = timestamp - state.segmentStart;
-            if (elapsed >= state.duration) {
-                const overflow = elapsed % state.duration;
-                state.segmentStart = timestamp - overflow;
-                state.startStyles = state.endStyles;
-                state.endStyles = generateDigitStyles();
-                state.duration = generateAnimationDuration();
-            }
-
-            const progress = Math.min((timestamp - state.segmentStart) / state.duration, 1);
-            applyStyles(state.digit, interpolateStyles(state.startStyles, state.endStyles, progress));
+class ShinigamiCanvasRenderer {
+    constructor(stage) {
+        this.stage = stage;
+        this.canvas = document.createElement('canvas');
+        this.canvas.className = 'shinigamiEyes__Canvas';
+        this.canvas.setAttribute('aria-hidden', 'true');
+        this.stage.appendChild(this.canvas);
+        this.context = this.canvas.getContext('2d', { alpha: true, desynchronized: true });
+        this.lines = [];
+        this.textureCache = new Map();
+        this.widthCache = new Map();
+        this.containerHeight = 100;
+        this.size = 1;
+        this.hue = 0;
+        this.saturation = 100;
+        this.brightness = 100;
+        this.opacity = 1;
+        this.intensity = SETTINGS.MOTION_INTENSITY;
+        this.glow = true;
+        this.digitBlur = true;
+        this.outline = false;
+        this.frameRequest = 0;
+        this.renderingExport = false;
+        this.pauseTime = 0;
+        this.resizeObserver = new ResizeObserver(() => this.resize());
+        this.resizeObserver.observe(stage);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) this.invalidate();
         });
-
-        return true;
+        this.resize();
     }
 
-    const controller = {
-        renderAt,
-        shiftTimeline(delta) {
-            animationStates.forEach((state) => {
-                if (state.segmentStart !== undefined) state.segmentStart += delta;
-            });
-            if (previousTimestamp !== undefined) previousTimestamp += delta;
-        },
-    };
-    digitAnimationControllers.add(controller);
+    createGlyph(char) {
+        return {
+            char,
+            start: randomStyle(),
+            end: randomStyle(),
+            segmentStart: performance.now(),
+            duration: randomDuration(),
+            phase: Math.random() * TAU,
+            slicePhases: Array.from({ length: 4 }, () => Math.random() * TAU),
+            trailPhases: Array.from({ length: 2 }, () => Math.random() * TAU),
+        };
+    }
 
-    function animateFrame(timestamp) {
-        if (!animationStates.some(({ digit }) => digit.isConnected)) {
-            digitAnimationControllers.delete(controller);
-            return;
+    addLine(text) {
+        const chars = text.replaceAll(' ', '⠀').split('');
+        this.lines.push({ text, glyphs: chars.map((char) => this.createGlyph(char)) });
+        this.updateHeight();
+        this.invalidate();
+    }
+
+    clear() {
+        this.lines.length = 0;
+        this.updateHeight();
+        this.invalidate();
+    }
+
+    reapply() {
+        const texts = this.getLines();
+        this.lines.length = 0;
+        texts.forEach((text) => this.addLine(text));
+        this.updateHeight();
+    }
+
+    getLines() {
+        return this.lines.map(({ text }) => text);
+    }
+
+    setAnimation(enabled) {
+        if (SETTINGS.ANIMATE === enabled) return;
+        if (!enabled) this.pauseTime = performance.now();
+        else {
+            const shift = performance.now() - this.pauseTime;
+            this.lines.forEach(({ glyphs }) => glyphs.forEach((glyph) => {
+                glyph.segmentStart += shift;
+            }));
+        }
+        SETTINGS.ANIMATE = enabled;
+        this.invalidate();
+    }
+
+    setOption(name, value) {
+        this[name] = value;
+        if (name === 'containerHeight' || name === 'size') this.updateHeight();
+        if (name === 'glow' || name === 'digitBlur') this.textureCache.clear();
+        this.invalidate();
+    }
+
+    updateHeight() {
+        const cloneReach = Math.max(0, Number(SETTINGS.CLONES.AMOUNT) - 1)
+            * SETTINGS.CLONES.TOP_OFFSET;
+        const contentHeight = this.lines.length * this.containerHeight + cloneReach
+            + 300 * Math.max(1, this.size);
+        this.stage.style.height = `${Math.max(1, contentHeight)}px`;
+        this.resize();
+    }
+
+    resize() {
+        const width = Math.max(1, this.stage.clientWidth);
+        const height = Math.max(1, this.stage.clientHeight);
+        const requestedDpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        const pixelBudgetDpr = Math.sqrt(3000000 / (width * height));
+        const dpr = Math.max(1, Math.min(requestedDpr, pixelBudgetDpr));
+        const pixelWidth = Math.round(width * dpr);
+        const pixelHeight = Math.round(height * dpr);
+        if (this.canvas.width !== pixelWidth || this.canvas.height !== pixelHeight) {
+            this.canvas.width = pixelWidth;
+            this.canvas.height = pixelHeight;
+            this.canvas.style.width = `${width}px`;
+            this.canvas.style.height = `${height}px`;
+        }
+        this.dpr = dpr;
+        this.invalidate();
+    }
+
+    invalidate() {
+        if (this.frameRequest || document.hidden) return;
+        this.frameRequest = requestAnimationFrame((timestamp) => this.frame(timestamp));
+    }
+
+    frame(timestamp) {
+        this.frameRequest = 0;
+        const time = SETTINGS.ANIMATE ? timestamp : this.pauseTime;
+        this.render(this.context, this.canvas.width, this.canvas.height, time, {
+            dpr: this.dpr,
+            background: 'transparent',
+            applyColorFilter: false,
+        });
+        this.canvas.style.filter = `hue-rotate(${this.hue}deg) saturate(${this.saturation}%) brightness(${this.brightness}%)`;
+        this.canvas.style.opacity = this.opacity;
+        if (SETTINGS.ANIMATE && !this.renderingExport && this.lines.length) this.invalidate();
+    }
+
+    currentStyle(glyph, time, mutate = true) {
+        let elapsed = time - glyph.segmentStart;
+        if (elapsed >= glyph.duration && mutate) {
+            const cycles = Math.floor(elapsed / glyph.duration);
+            glyph.segmentStart += cycles * glyph.duration;
+            glyph.start = glyph.end;
+            glyph.end = randomStyle();
+            glyph.duration = randomDuration();
+            elapsed = time - glyph.segmentStart;
+        }
+        const amount = clamp(elapsed / glyph.duration, 0, 1);
+        return applyMotionIntensity(
+            interpolateStyle(glyph.start, glyph.end, amount),
+            this.intensity,
+        );
+    }
+
+    glyphWidth(char) {
+        if (this.widthCache.has(char)) return this.widthCache.get(char);
+        const ctx = this.context;
+        ctx.save();
+        ctx.font = '300 100px "Noto Serif JP", serif';
+        const width = ctx.measureText(char).width / 100;
+        ctx.restore();
+        this.widthCache.set(char, width);
+        return width;
+    }
+
+    texture(char, kind) {
+        const blur = this.digitBlur ? 1 : 0;
+        const key = `${char}|${kind}|${this.glow}|${blur}`;
+        if (this.textureCache.has(key)) return this.textureCache.get(key);
+
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.translate(size / 2, size / 2);
+        ctx.font = '300 100px "Noto Serif JP", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (kind === 'smear') ctx.filter = `blur(${7 + blur}px)`;
+        else if (blur) ctx.filter = `blur(${blur}px)`;
+
+        const paint = (color, shadowColor = 'transparent', shadowBlur = 0) => {
+            ctx.fillStyle = color;
+            ctx.shadowColor = this.glow ? shadowColor : 'transparent';
+            ctx.shadowBlur = this.glow ? shadowBlur : 0;
+            ctx.fillText(char, 0, 0);
+        };
+
+        if (kind === 'core') {
+            if (this.glow) {
+                paint('rgba(255,78,94,.7)', '#ff4e5e', 22);
+                paint('rgba(255,208,214,.88)', '#ff7180', 10);
+            }
+            paint('#ffe1e1', '#fff', 3);
+        } else if (kind === 'echo') {
+            paint('#ffc7cd', '#ff6978', 12);
+        } else if (kind === 'smear') {
+            paint('rgba(255,74,94,.48)', '#ff3854', 30);
+            paint('rgba(255,118,132,.24)', '#ff596e', 18);
+        } else if (kind === 'trail') {
+            const gradient = ctx.createLinearGradient(0, -48, 0, 70);
+            gradient.addColorStop(0, '#ffb4bd');
+            gradient.addColorStop(.5, '#ff8998');
+            gradient.addColorStop(1, 'rgba(255,80,98,0)');
+            ctx.fillStyle = gradient;
+            ctx.shadowColor = this.glow ? '#ff485a' : 'transparent';
+            ctx.shadowBlur = this.glow ? 12 : 0;
+            ctx.fillText(char, 0, 0);
+        } else {
+            paint('#ffc0c5', '#ff5868', 10);
+        }
+        this.textureCache.set(key, canvas);
+        return canvas;
+    }
+
+    drawTexture(ctx, glyph, kind, x, y, style, opacity, transform = {}) {
+        if (opacity < .002) return;
+        const extent = style.fontSize * 2.56;
+        ctx.save();
+        ctx.globalAlpha *= clamp(opacity, 0, 1);
+        ctx.translate(x + (transform.x || 0), y + (transform.y || 0));
+        ctx.rotate((style.rotation + (transform.rotation || 0)) * Math.PI / 180);
+        ctx.transform(style.scaleX * (transform.scaleX || 1), 0, 0,
+            transform.scaleY || 1, 0, 0);
+        if (transform.clip) {
+            const { top, bottom } = transform.clip;
+            ctx.beginPath();
+            ctx.rect(-style.fontSize, -style.fontSize * .5 + style.fontSize * top,
+                style.fontSize * 2, style.fontSize * (bottom - top));
+            ctx.clip();
+        }
+        ctx.drawImage(this.texture(glyph.char, kind), -extent / 2, -extent / 2, extent, extent);
+        if (this.outline && kind === 'core') {
+            ctx.strokeStyle = 'rgba(255,255,255,.85)';
+            ctx.lineWidth = 1 / Math.max(style.scaleX, .1);
+            ctx.strokeRect(-style.fontSize * .42, -style.fontSize * .52,
+                style.fontSize * .84, style.fontSize * 1.04);
+        }
+        ctx.restore();
+    }
+
+    drawGlyph(ctx, glyph, style, x, y, attractor, time, cloneOpacity) {
+        const centerY = y + style.translateY;
+        const dx = attractor.x - x;
+        const dy = attractor.y - centerY;
+        const distance = Math.hypot(dx, dy) || 1;
+        const directionX = dx / distance;
+        const directionY = dy / distance;
+        const baseOpacity = style.opacity * cloneOpacity;
+        const effectTime = time * SETTINGS.MOTION_SPEED;
+        const intensity = this.intensity;
+        const slow = effectTime / 4200 + glyph.phase;
+
+        // A soft stack of offset, pre-blurred glyphs recreates the long red
+        // directional shadow without invoking an expensive canvas blur every frame.
+        if (this.glow && intensity > .01) {
+            const smearLength = Math.min(distance * .52, 190) * Math.min(intensity, 2);
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            for (let sample = 7; sample >= 1; sample--) {
+                const progress = sample / 7;
+                const fade = 1 - progress * .72;
+                this.drawTexture(ctx, glyph, 'smear', x, centerY, style,
+                    baseOpacity * .17 * fade, {
+                        x: directionX * smearLength * progress,
+                        y: directionY * smearLength * progress,
+                        scaleX: 1 + progress * .05 * intensity,
+                        scaleY: 1 + progress * .2 * intensity,
+                    });
+            }
+            ctx.restore();
         }
 
-        if (exportAnimationTimestamp === undefined) renderAt(timestamp);
-        requestAnimationFrame(animateFrame);
+        const hazeLength = Math.min(distance * .68, 170);
+        const gradient = ctx.createLinearGradient(0, 0, 0, hazeLength);
+        gradient.addColorStop(0, 'rgba(255,122,136,.24)');
+        gradient.addColorStop(.42, 'rgba(255,78,96,.13)');
+        gradient.addColorStop(1, 'rgba(255,45,70,0)');
+        ctx.save();
+        ctx.globalAlpha *= baseOpacity * (.25 + .12 * Math.sin(slow));
+        ctx.translate(x, centerY + style.fontSize * .12);
+        ctx.rotate(Math.atan2(dy, dx) - Math.PI / 2);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(-style.fontSize * .13, 0, style.fontSize * .26, hazeLength);
+        ctx.restore();
+
+        for (let index = 2; index >= 0; index--) {
+            const depth = (index + 1) / 3;
+            const pulse = .9 + .1 * Math.sin(slow + depth);
+            const travel = (.04 + depth * .42) * intensity;
+            const echoScale = Math.max(.08, 1 + ((1 - depth * .7) - 1) * intensity);
+            this.drawTexture(ctx, glyph, 'echo', x, centerY, style,
+                baseOpacity * (.22 - depth * .15) * pulse, {
+                    x: dx * travel,
+                    y: dy * travel,
+                    scaleX: echoScale,
+                    scaleY: echoScale,
+                });
+        }
+
+        for (let index = 1; index >= 0; index--) {
+            const phase = effectTime / (index ? 5100 : 4400) + glyph.trailPhases[index];
+            const wave = (Math.sin(phase) + 1) / 2;
+            const length = (10 + index * 9 + wave * 12) * intensity;
+            const opacity = baseOpacity * (index ? .1 : .17);
+            for (let sample = 2; sample >= 0; sample--) {
+                const progress = sample / 2;
+                this.drawTexture(ctx, glyph, 'trail', x, centerY, style,
+                    opacity * (1 - progress * .55), {
+                        x: directionX * length * progress,
+                        y: directionY * length * progress + wave * 4 * intensity,
+                        rotation: (Math.atan2(dy, dx) * 180 / Math.PI - 90) * wave * intensity,
+                        scaleX: 1 - wave * .1 * intensity,
+                        scaleY: 1 + wave * (.08 + index * .04) * intensity,
+                    });
+            }
+        }
+
+        for (let index = 0; index < 4; index++) {
+            const depth = (index + 1) / 4;
+            const phase = effectTime / (3200 + index * 420) + glyph.slicePhases[index];
+            const wave = (Math.sin(phase) + 1) / 2;
+            const flow = (4 + depth * 8) * intensity;
+            this.drawTexture(ctx, glyph, 'slice', x, centerY, style,
+                baseOpacity * (.18 + depth * .12), {
+                    x: directionX * flow * wave,
+                    y: directionY * flow * wave,
+                    rotation: (Math.atan2(dy, dx) * 180 / Math.PI - 90) * .55 * wave * intensity,
+                    scaleX: 1 - wave * .04 * intensity,
+                    scaleY: 1 + wave * (.08 + depth * .12) * intensity,
+                    clip: { top: .1 + index * .22, bottom: Math.min(.28 + index * .22, 1) },
+                });
+        }
+
+        this.drawTexture(ctx, glyph, 'core', x, centerY, style,
+            baseOpacity * (.94 + .06 * Math.sin(slow * 1.15)));
     }
 
-    requestAnimationFrame(animateFrame);
+    sceneLayout(time, mutate = true, lines = this.lines) {
+        const layouts = [];
+        let bottom = 0;
+        lines.forEach((line, lineIndex) => {
+            const styles = line.glyphs.map((glyph) => this.currentStyle(glyph, time, mutate));
+            const widths = styles.map((style, index) =>
+                this.glyphWidth(line.glyphs[index].char) * style.fontSize
+                + style.paddingLeft + style.paddingRight);
+            const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+            for (let clone = 0; clone < Number(SETTINGS.CLONES.AMOUNT); clone++) {
+                const cloneScale = Math.pow(SETTINGS.CLONES.SCALE_MULTIPLIER, clone) * this.size;
+                const cloneOpacity = clone === 0
+                    ? 1
+                    : .2 * Math.pow(SETTINGS.CLONES.OPACITY_MULTIPLIER, clone - 1);
+                let cursor = -totalWidth / 2;
+                const y = lineIndex * this.containerHeight + SETTINGS.CLONES.TOP_OFFSET
+                    + clone * SETTINGS.CLONES.TOP_OFFSET;
+                const glyphs = line.glyphs.map((glyph, index) => {
+                    const x = (cursor + widths[index] / 2) * cloneScale;
+                    cursor += widths[index];
+                    return { glyph, style: styles[index], x, y, cloneScale, cloneOpacity };
+                });
+                layouts.push({ glyphs, y, totalWidth: totalWidth * cloneScale });
+                bottom = Math.max(bottom, y + 120 * cloneScale);
+            }
+        });
+        return { layouts, bottom };
+    }
+
+    cloneLinesForExport() {
+        return this.lines.map((line) => ({
+            text: line.text,
+            glyphs: line.glyphs.map((glyph) => ({
+                ...glyph,
+                start: { ...glyph.start },
+                end: { ...glyph.end },
+                slicePhases: [...glyph.slicePhases],
+                trailPhases: [...glyph.trailPhases],
+            })),
+        }));
+    }
+
+    getExportCrop(time = performance.now(), lines = this.lines) {
+        if (!lines.length) throw new Error('Add at least one line before exporting.');
+        const { layouts, bottom } = this.sceneLayout(time, false, lines);
+        const widest = Math.max(...layouts.map(({ totalWidth }) => totalWidth), 2);
+        const top = 30;
+        return {
+            left: -widest / 2 - 190,
+            top,
+            width: widest + 380,
+            height: Math.max(2, bottom + 135 - top),
+        };
+    }
+
+    createExportSession(time = performance.now()) {
+        const lines = this.cloneLinesForExport();
+        return {
+            lines,
+            startTime: time,
+            crop: this.getExportCrop(time, lines),
+        };
+    }
+
+    render(ctx, pixelWidth, pixelHeight, time, options = {}) {
+        const dpr = options.dpr || 1;
+        const background = options.background || 'transparent';
+        const crop = options.crop;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.filter = 'none';
+        ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+        if (background !== 'transparent') {
+            ctx.fillStyle = background;
+            ctx.fillRect(0, 0, pixelWidth, pixelHeight);
+        }
+        if (options.applyColorFilter) {
+            ctx.filter = `hue-rotate(${this.hue}deg) saturate(${this.saturation}%) brightness(${this.brightness}%)`;
+            ctx.globalAlpha = this.opacity;
+        }
+
+        const scale = crop ? pixelWidth / crop.width : dpr;
+        const originX = crop ? -crop.left * scale : pixelWidth / 2;
+        const originY = crop ? -crop.top * scale : 0;
+        ctx.translate(originX, originY);
+        ctx.scale(scale, scale);
+
+        const lines = options.lines || this.lines;
+        const mutateTimeline = options.mutateTimeline ?? !options.exporting;
+        const { layouts, bottom } = this.sceneLayout(time, mutateTimeline, lines);
+        if (!crop && layouts.length) {
+            const widest = Math.max(...layouts.map(({ totalWidth }) => totalWidth), 1);
+            const fit = Math.min(1, (pixelWidth / dpr - 16) / widest);
+            ctx.scale(fit, fit);
+        }
+        const attractor = { x: 0, y: bottom + 140 };
+        layouts.forEach(({ glyphs }) => glyphs.forEach((item) => {
+            ctx.save();
+            ctx.translate(item.x, item.y);
+            ctx.scale(item.cloneScale, item.cloneScale);
+            this.drawGlyph(ctx, item.glyph, item.style, 0, 0, {
+                x: attractor.x / item.cloneScale - item.x / item.cloneScale,
+                y: (attractor.y - item.y) / item.cloneScale,
+            }, time, item.cloneOpacity);
+            ctx.restore();
+        }));
+        ctx.filter = 'none';
+        ctx.globalAlpha = 1;
+    }
+
+    renderExportFrame(canvas, time, background, crop, lines) {
+        const ctx = canvas.getContext('2d', {
+            alpha: background === 'transparent',
+            willReadFrequently: true,
+        });
+        this.render(ctx, canvas.width, canvas.height, time, {
+            dpr: canvas.width / crop.width,
+            background,
+            crop,
+            applyColorFilter: true,
+            exporting: true,
+            lines,
+            mutateTimeline: Boolean(lines),
+        });
+        return canvas;
+    }
 }
 
-window.shinigamiAnimationClock = {
-    begin() {
-        exportAnimationTimestamp = performance.now();
-        digitAnimationControllers.forEach((controller) => controller.renderAt(exportAnimationTimestamp));
-        return exportAnimationTimestamp;
-    },
-    seek(timestamp) {
-        exportAnimationTimestamp = timestamp;
-        digitAnimationControllers.forEach((controller) => controller.renderAt(timestamp));
-    },
-    end() {
-        if (exportAnimationTimestamp === undefined) return;
-        const resumedAt = performance.now();
-        const timelineShift = resumedAt - exportAnimationTimestamp;
-        digitAnimationControllers.forEach((controller) => controller.shiftTimeline(timelineShift));
-        exportAnimationTimestamp = undefined;
-    },
-};
+window.shinigamiRenderer = new ShinigamiCanvasRenderer(document.getElementById('animationStage'));
 
-let lastAttractorUpdate = 0;
+function setAnimation(status) {
+    window.shinigamiRenderer.setAnimation(status);
+}
 
-if (typeof window !== 'undefined') {
-    window.addEventListener('resize', () => requestAnimationFrame(updateAttractorDirections));
+function enableGlow() {
+    window.shinigamiRenderer.setOption('glow', true);
 }
